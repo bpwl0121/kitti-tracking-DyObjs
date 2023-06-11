@@ -113,8 +113,7 @@ def generate_all_videos_from_bbox_image():
         output_path=os.path.join("all_videos",seq+".mp4")
         print(output_path)
         generate_video_from_image_seq(curr_image_folder,output_path)
-
-################################
+        
 def save_moving_mask_image(sequence_num, idx,moving_mask_dict,ignored_mask_dict):
     img_path=os.path.join("data_tracking_image_2/training/image_02/",sequence_num,f"{(idx):06d}.png")
     output_path=os.path.join("moving_mask_img_ignored",sequence_num,f"{(idx):06d}.png")
@@ -154,19 +153,6 @@ def save_moving_mask_image_detectron(sequence_num, idx):
     cv2.imwrite(output_path,img)
 
 
-def save_seqs_moving_mask_image(moving_threshold,association_threshold):
-    fulltrain=r"fulltrain.seqmap"
-    seqmap, max_frames=fmo.load_seqmap(fulltrain)
-    label_folder=r"data_tracking_label_2/training/label_02"
-    pose_folder=r"orbslam3_poses"
-    all_obj_info_dict, all_moving_id_dict=fmo.find_all_moving_obj_id(label_folder,pose_folder,seqmap,moving_threshold)
-    mots_mask_datasets = {s:load_txt("instances_txt/{}.txt".format(s)) for s in seqmap}
-    moving_mask_dict,ignored_mask_dict=da.get_moving_mask_dict(all_moving_id_dict,mots_mask_datasets,all_obj_info_dict,association_threshold)
-    
-    for seq_num,frame_nums in max_frames.items():
-        os.makedirs(os.path.join("moving_mask_img_ignored",seq_num), exist_ok=True) 
-        for frame_num in range(frame_nums+1):
-            save_moving_mask_image(seq_num,frame_num,moving_mask_dict,ignored_mask_dict)
 
 def save_seqs_moving_mask_image_detectron(moving_threshold,association_threshold):
     fulltrain=r"fulltrain.seqmap"

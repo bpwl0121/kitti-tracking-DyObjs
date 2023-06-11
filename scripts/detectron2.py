@@ -46,7 +46,7 @@ if __name__ == '__main__':
         output_path=os.path.join("../data/mask_from_detectron",seq_num) 
         for frame_num in range(frame_nums+1):
         
-            img_path=os.path.join("../MonoRec2/data/data_tracking_image_2/training/image_02/",seq_num,f"{(frame_num):06d}.png")
+            img_path=os.path.join("../data/data_tracking_image_2/training/image_02/",seq_num,f"{(frame_num):06d}.png")
             
             img = cv2.imread(img_path)
             pred = predictor(img)['instances']
