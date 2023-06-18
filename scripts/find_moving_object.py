@@ -160,6 +160,15 @@ def find_avg_location_diff(obj_dict):
 
 
 def find_moving_id_from_tracking_label(label_file, pose_file, moving_threshold):
+    """find the moving id from the KITTI tracking label file
+    Args:
+        label_file: the path of the label file
+        pose_file: the path of the pose file
+        moving_threshold: the threshold to determine whether the object is moving
+    Returns:
+        moving_id_dict: a dict with frame_id as key and moving id list as value
+        obj_info_dict: a dict with frame_id as key and obj info dict as value
+    """
     # dict -> obj -> frame to get the location diff of one obj in different frame
     poses = load_poses(pose_file)
 
@@ -169,18 +178,21 @@ def find_moving_id_from_tracking_label(label_file, pose_file, moving_threshold):
 
     moving_obj_cnt_dict = {}
 
+    # read the KITTI tracking label file and process it line by line
     with open(label_file) as f:
         for line in f.readlines():
             line = line.split()
             this_name = line[2]
             frame_id = int(line[0])
             ob_id = int(line[1])
+            # if the frame id is not in the dict, add it
             if frame_id not in moving_id_dict:
                 moving_id_dict[frame_id] = []
             if frame_id not in obj_info_dict:
                 obj_info_dict[frame_id] = dict()
 
             if this_name != "DontCare":
+                # get the global location of the object by relative location of the object in current frame and the pose of the current frame
                 location = np.array(line[13:16], np.float32)
                 location = poses[frame_id][:3, :3]@location + \
                     poses[frame_id][:3, 3]
@@ -196,7 +208,9 @@ def find_moving_id_from_tracking_label(label_file, pose_file, moving_threshold):
 
                 transformation = np.eye(4)
 
+                # if the object is in the dict
                 if ob_id in obj_dict.keys():
+                    # get the info of the last frame of the same object
                     last_frame_id = obj_dict[ob_id][-1][0]
                     last_frame_bbox_3d = obj_dict[ob_id][-1][2]
                     R, T = Kabsch_solver(
@@ -206,37 +220,43 @@ def find_moving_id_from_tracking_label(label_file, pose_file, moving_threshold):
                     transformation[:3, 3] = T
 
                     line.append(transformation)  # 4
+                    # calculate the global location difference between the current frame and the last frame of the same object
                     # ignore the y axis movement
                     location_diff = [location[0]-obj_dict[ob_id][-1]
                                      [3][0], location[2]-obj_dict[ob_id][-1][3][2]]
                     line.append(np.linalg.norm(location_diff))  # 5
-                  #  line.append(np.linalg.norm(location-obj_dict[ob_id][-1][3])) # 5
+                    # line.append(np.linalg.norm(location-obj_dict[ob_id][-1][3])) # 5
                     obj_dict[ob_id].append(line)
 
+                    # print info if the object is not be seen in the consecutive frame
                     if last_frame_id != frame_id-1:
                         print("last frame is {}, but this frame is {} for obj {}".format(
                             last_frame_id, frame_id, ob_id))
 
                 else:
+                    # add new obj if it is not in the dict
                     line.append(transformation)  # 4
                     line.append(0)  # 5
                     obj_dict[ob_id] = [line]
 
                 obj_info_dict[frame_id][ob_id] = line
 
+                # add the moving id to the dict if the location diff is larger than the threshold
                 if line[5] > moving_threshold and (this_name == "Pedestrian" or this_name == "Person"):
                     moving_id_dict[frame_id].append(ob_id)
                     # handle the first frame of the moving obj
                     if len(obj_dict[ob_id]) == 2:
                         # obj_dict[ob_id][0][0] is the frame id of the first frame for ob_id
                         moving_id_dict[obj_dict[ob_id][0][0]].append(ob_id)
-                if line[5] > (moving_threshold+0.1) and this_name != "Pedestrian":
+                # threshold for car
+                if line[5] > (moving_threshold+0.1) and not (this_name == "Pedestrian" or this_name == "Person"):
                     moving_id_dict[frame_id].append(ob_id)
                     # handle the first frame of the moving obj
                     if len(obj_dict[ob_id]) == 2:
                         # obj_dict[ob_id][0][0] is the frame id of the first frame for ob_id
                         moving_id_dict[obj_dict[ob_id][0][0]].append(ob_id)
 
+    # count the number of frames that the moving obj appears
     for frame_id in moving_id_dict:
         for ob_id in moving_id_dict[frame_id]:
             if ob_id not in moving_obj_cnt_dict:
@@ -244,6 +264,7 @@ def find_moving_id_from_tracking_label(label_file, pose_file, moving_threshold):
             else:
                 moving_obj_cnt_dict[ob_id] += 1
 
+    # we only keep the moving obj that appears in more than 3 frames
     for frame_id in moving_id_dict:
         for ob_id in moving_id_dict[frame_id]:
             if moving_obj_cnt_dict[ob_id] < 4:
@@ -267,12 +288,21 @@ def find_moving_id_from_tracking_label(label_file, pose_file, moving_threshold):
 
 
 def find_all_moving_obj_id(label_folder, pose_folder, list_sequences, moving_threshold):
-    # list_sequences, _  = load_seqmap(seqmap_filename)
+    """find all moving obj id from the tracking label and pose file
+    Args:
+        label_folder: the folder that contains the tracking label
+        pose_folder: the folder that contains the pose file
+        list_sequences: the list of sequences that we want to process
+        moving_threshold: the threshold to determine whether the obj is moving or not
+    Returns:
+        all_obj_info_dict: the dict that contains the info of all obj in all frames
+        all_moving_id: the dict that contains the moving obj id in all frames
+    """
     all_moving_id = dict()
     all_obj_info_dict = dict()
     print(list_sequences)
     for sequence in list_sequences:
-        print(sequence)
+        print("processing {}".format(sequence))
         pose_file = pose_folder + '/' + sequence + '/' + "CameraTrajectory.txt"
         label_file = label_folder + '/' + sequence + ".txt"
 
@@ -285,6 +315,14 @@ def find_all_moving_obj_id(label_folder, pose_folder, list_sequences, moving_thr
 
 
 def generate_obj_detection(label_folder, seqmap_filename, offset):
+    """generate the detection file from the tracking label file
+    Args:
+        label_folder: the folder that contains the tracking label
+        seqmap_filename: the seqmap file that contains the sequence name
+        offset: the offset of the frame id that we don't want to consider
+    Returns:    
+        all_detectio_dict: the detection dict
+    """
     list_sequences, max_frames = load_seqmap(seqmap_filename)
     all_detectio_dict = dict()
     for sequence in list_sequences:
@@ -300,6 +338,14 @@ def generate_obj_detection(label_folder, seqmap_filename, offset):
 
 
 def generate_obj_detection_file(label_file, offset, max_frame):
+    """generate the detection file from the tracking label file
+    Args:
+        label_file: the tracking label file
+        offset: the offset of the frame id that we don't want to consider
+        max_frame: the max frame id
+    Returns:
+        detectio_dict: the detection dict
+    """
 
     curr_max_frame = max_frame-offset
     detectio_dict = dict()

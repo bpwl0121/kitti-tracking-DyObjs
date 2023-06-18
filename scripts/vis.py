@@ -15,7 +15,7 @@ class SegmentedObject:
         self.track_id = track_id
 
 
-# https://github.com/VisualComputingInstitute/mots_tools/blob/master/mots_common/io.py
+# copy from: https://github.com/VisualComputingInstitute/mots_tools/blob/master/mots_common/io.py
 def load_txt(path):
   objects_per_frame = {}
   track_ids_per_frame = {}  # To check that no frame contains two objects with same id
@@ -57,6 +57,11 @@ def load_txt(path):
 
 
 def generate_video_from_image_seq(image_folder,video_file_path):
+    """generate video from image sequence for better visualization
+    Args:
+        image_folder: the folder that contains all the images
+        video_file_path: the path of the output video
+    """
     
     fps = 10
 
@@ -77,6 +82,9 @@ def generate_video_from_image_seq(image_folder,video_file_path):
 
 
 def save_moving_bbox_image(sequence_num, idx,all_obj_info_dict,all_moving_id_dict):
+    """save the image with moving object bbox
+
+    """
     img_path=os.path.join("data_tracking_image_2/training/image_02/",sequence_num,f"{(idx):06d}.png")
     output_path=os.path.join("all_bbox_img",sequence_num,f"{(idx):06d}.png")
     img = cv2.imread(img_path)
@@ -93,6 +101,10 @@ def save_moving_bbox_image(sequence_num, idx,all_obj_info_dict,all_moving_id_dic
     cv2.imwrite(output_path,img)
 
 def save_seqs_moving_bbox_image(moving_threshold):
+    """save the image with moving object bbox for all the sequences
+    Args:
+        moving_threshold: the threshold to determine whether the object is moving or not  
+    """
     fulltrain=r"fulltrain.seqmap"
     seqmap, max_frames=fmo.load_seqmap(fulltrain)
     label_folder=r"data_tracking_label_2/training/label_02"
@@ -104,6 +116,8 @@ def save_seqs_moving_bbox_image(moving_threshold):
             save_moving_bbox_image(seq_num,frame_num,all_obj_info_dict,all_moving_id_dict)
 
 def generate_all_videos_from_bbox_image():
+    """generate all the videos from the bbox images
+    """
     image_root_folder="all_bbox_img"
     fulltrain=r"fulltrain.seqmap"
     all_seq,_=fmo.load_seqmap(fulltrain)
@@ -111,7 +125,6 @@ def generate_all_videos_from_bbox_image():
         curr_image_folder=os.path.join(image_root_folder,seq)
         # new the folder first!!!!!!!!!!!!!!!!!
         output_path=os.path.join("all_videos",seq+".mp4")
-        print(output_path)
         generate_video_from_image_seq(curr_image_folder,output_path)
         
 def save_moving_mask_image(sequence_num, idx,moving_mask_dict,ignored_mask_dict):

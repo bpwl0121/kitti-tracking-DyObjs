@@ -71,8 +71,11 @@ def compute_overlaps(boxes1, boxes2):
 
 # for detectron
 def get_moving_mask_dict_detectron(all_moving_id_dict, detectron_img_folder, all_obj_info_dict, association_threshold):
+    """generate moving mask from detectron segmentation mask and moving id dict.
+    Here we use hungarian algorithm to associate moving id and segmentation mask.
+    """
     os.makedirs(os.path.join("moving_mask_detectron_index",), exist_ok=True)
-    # https://github.com/xinshuoweng/AB3DMOT/blob/6698c95606d819c03c9215b42f6f652b635a324d/AB3DMOT_libs/matching.py
+    # reference: https://github.com/xinshuoweng/AB3DMOT/blob/6698c95606d819c03c9215b42f6f652b635a324d/AB3DMOT_libs/matching.py
     for seq_num in all_moving_id_dict.keys():
         print("start seq{}".format(seq_num))
         moving_mask_index = dict()
