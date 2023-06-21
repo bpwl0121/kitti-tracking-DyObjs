@@ -1,5 +1,4 @@
 numpy
 scipy
 pycocotools
-json
-opencv
+opencv-python
