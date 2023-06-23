@@ -115,6 +115,9 @@ def load_poses(pose_path):
     return poses
 
 
+# we propose to use the Kabsch algorithm to find the rotation and translation
+# using relative rotation and translation instead of absolute difference of location
+# but the result is not good
 def find_final_RT(obj_dict):
     # rotation and translation from the first and last frame
     # and translation diff from the first and last frame
@@ -300,7 +303,7 @@ def find_all_moving_obj_id(label_folder, pose_folder, list_sequences, moving_thr
     """
     all_moving_id = dict()
     all_obj_info_dict = dict()
-    print(list_sequences)
+    print("processing sequences: {}".format(list_sequences))
     for sequence in list_sequences:
         print("processing {}".format(sequence))
         pose_file = pose_folder + '/' + sequence + '/' + "CameraTrajectory.txt"

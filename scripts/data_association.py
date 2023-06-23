@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-import pycocotools.mask as rletools
 import os
 import json
 
@@ -85,16 +84,19 @@ def get_moving_mask_dict_detectron(all_moving_id_dict, detectron_img_folder, all
 
         for frame_num in all_moving_id_dict[seq_num]:
 
+            # load detectron mask
             decoded_mots_mask_list = list()
             detectron_mask_path = os.path.join(
                 detectron_img_folder[seq_num], f"{(frame_num):06d}.npy")
             detectron_mask = np.load(detectron_mask_path)
+            # get each instance mask from the detectron mask array
             for single_detectron_mask in detectron_mask:
                 decoded_mots_mask_list.append(single_detectron_mask*1)
 
             moving_bbox_list = list()
             for moving_id in all_moving_id_dict[seq_num][frame_num]:
                 moving_bbox_xy = all_obj_info_dict[seq_num][frame_num][moving_id][1]
+                # convert to y1,x1,y2,x2 format
                 moving_bbox_yx = [
                     moving_bbox_xy[1], moving_bbox_xy[0], moving_bbox_xy[3], moving_bbox_xy[2]]
                 moving_bbox_list.append(moving_bbox_yx)
@@ -102,34 +104,40 @@ def get_moving_mask_dict_detectron(all_moving_id_dict, detectron_img_folder, all
             if len(decoded_mots_mask_list) != 0 and len(moving_bbox_list) != 0:
 
                 decoded_mots_masks = np.stack(decoded_mots_mask_list, axis=2)
+                # extract bbox from segmentation mask
                 seg_obj_2d_bboxs = extract_bboxes(decoded_mots_masks)
 
                 all_moving_bboxs = np.stack(moving_bbox_list, axis=0)
 
+                # compute overlaps between moving bbox and segmentation mask
                 aff_matrix = compute_overlaps(
                     all_moving_bboxs, seg_obj_2d_bboxs)
 
-                # hougarian algorithm
+                # hougarian algorithm using the negative of the overlap matrix as the cost matrix
                 row_ind, col_ind = linear_sum_assignment(-aff_matrix)
                 matched_indices = np.stack((row_ind, col_ind), axis=1)
 
                 matches_mask_ind = []
                 for m in matched_indices:
+                    # if the overlap is smaller than the threshold, we do not consider it as a match
                     if (aff_matrix[m[0], m[1]] < association_threshold):
                         pass
                     else:
                         matches_mask_ind.append(m[1])
+                # if there is no any match
                 if len(matches_mask_ind) == 0:
                     moving_mask_index[frame_num] = False
                 else:
+                    # sum all the matched segmentation mask into one moving mask
                     moving_mask = sum(
                         decoded_mots_mask_list[i] for i in matches_mask_ind)
+                    # save moving mask
                     moving_mask_path = os.path.join(
                         "moving_mask_detectron", seq_num, f"{(frame_num):06d}")
                     np.save(moving_mask_path, moving_mask)
                     moving_mask_index[frame_num] = True
 
-          
+        # save moving mask index, which indicates whether there is a moving mask in the frame
         with open(os.path.join("moving_mask_detectron_index", seq_num+'.json'), 'w') as f:
             json.dump(moving_mask_index, f)
 
