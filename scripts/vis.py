@@ -4,62 +4,7 @@ import os
 import numpy as np
 import data_association as da
 import sys
-import pycocotools.mask as rletools
 sys.path.append("..")
-
-
-class SegmentedObject:
-    """Class to represent a single object in a segmentation mask.
-    """
-
-    def __init__(self, mask, class_id, track_id):
-        self.mask = mask
-        self.class_id = class_id
-        self.track_id = track_id
-
-
-# copy from: https://github.com/VisualComputingInstitute/mots_tools/blob/master/mots_common/io.py
-def load_txt(path):
-    objects_per_frame = {}
-    track_ids_per_frame = {}  # To check that no frame contains two objects with same id
-    combined_mask_per_frame = {}  # To check that no frame contains overlapping masks
-    with open(path, "r") as f:
-        for line in f:
-            line = line.strip()
-            fields = line.split(" ")
-
-            frame = int(fields[0])
-            if frame not in objects_per_frame:
-                objects_per_frame[frame] = []
-            if frame not in track_ids_per_frame:
-                track_ids_per_frame[frame] = set()
-            if int(fields[1]) in track_ids_per_frame[frame]:
-                assert False, "Multiple objects with track id " + \
-                    fields[1] + " in frame " + fields[0]
-            else:
-                track_ids_per_frame[frame].add(int(fields[1]))
-
-            class_id = int(fields[2])
-            if not (class_id == 1 or class_id == 2 or class_id == 10):
-                assert False, "Unknown object class " + fields[2]
-
-            mask = {'size': [int(fields[3]), int(fields[4])],
-                    'counts': fields[5].encode(encoding='UTF-8')}
-            if frame not in combined_mask_per_frame:
-                combined_mask_per_frame[frame] = mask
-            elif rletools.area(rletools.merge([combined_mask_per_frame[frame], mask], intersect=True)) > 0.0:
-                assert False, "Objects with overlapping masks in frame " + \
-                    fields[0]
-            else:
-                combined_mask_per_frame[frame] = rletools.merge(
-                    [combined_mask_per_frame[frame], mask], intersect=False)
-            objects_per_frame[frame].append(SegmentedObject(
-                mask,
-                class_id,
-                int(fields[1])
-            ))
-
-    return objects_per_frame
 
 
 def generate_video_from_image_seq(image_folder, video_file_path):
@@ -117,10 +62,10 @@ def save_seqs_moving_bbox_image(moving_threshold):
         moving_threshold: the threshold to determine whether the object is moving or not  
     """
     fulltrain = r"fulltrain.seqmap"
-    seqmap, max_frames = fmo.load_seqmap(fulltrain)
+    seqmap, max_frames = fmo.SeqmapLoader.load_seqmap(fulltrain)
     label_folder = r"data_tracking_label_2/training/label_02"
     pose_folder = r"orbslam3_poses"
-    all_obj_info_dict, all_moving_id_dict = fmo.find_all_moving_obj_id(
+    all_obj_info_dict, all_moving_id_dict = fmo.MovingObjectDetector.find_all_moving_obj_id(
         label_folder, pose_folder, seqmap, moving_threshold)
     for seq_num, frame_nums in max_frames.items():
         os.makedirs(os.path.join("all_bbox_img", seq_num), exist_ok=True)
@@ -134,7 +79,7 @@ def generate_all_videos_from_bbox_image():
     """
     image_root_folder = "all_bbox_img"
     fulltrain = r"fulltrain.seqmap"
-    all_seq, _ = fmo.load_seqmap(fulltrain)
+    all_seq, _ = fmo.SeqmapLoader.load_seqmap(fulltrain)
     for seq in all_seq:
         curr_image_folder = os.path.join(image_root_folder, seq)
         # new the folder first!!!!!!!!!!!!!!!!!
@@ -192,14 +137,17 @@ def save_moving_mask_image_detectron(sequence_num, idx):
 
 def save_seqs_moving_mask_image_detectron(moving_threshold, association_threshold):
     fulltrain = r"fulltrain.seqmap"
-    seqmap, max_frames = fmo.load_seqmap(fulltrain)
+    seqmap, max_frames = fmo.SeqmapLoader.load_seqmap(fulltrain)
     label_folder = r"data_tracking_label_2/training/label_02"
     pose_folder = r"orbslam3_poses"
-    all_obj_info_dict, all_moving_id_dict = fmo.find_all_moving_obj_id(
-        label_folder, pose_folder, seqmap, moving_threshold)
+    moving_obj_detector = fmo.MovingObjectDetector(seqmap_filename=fulltrain,
+                                                   label_folder=label_folder,
+                                                   pose_folder=pose_folder,
+                                                   moving_threshold=moving_threshold)
+    all_obj_info_dict, all_moving_id_dict = moving_obj_detector.find_all_moving_obj_id()
     detectron_img_folder = {s: os.path.join(
         "mask_from_detectron", s) for s in seqmap}
-    da.get_moving_mask_dict_detectron(
+    da.MovingMaskAssociator.get_moving_mask_dict_detectron(
         all_moving_id_dict, detectron_img_folder, all_obj_info_dict, association_threshold)
 
     for seq_num, frame_nums in max_frames.items():
@@ -212,7 +160,7 @@ def save_seqs_moving_mask_image_detectron(moving_threshold, association_threshol
 def generate_all_videos_from_mask_image_detectron():
     image_root_folder = "moving_mask_img_detectron"
     fulltrain = r"fulltrain.seqmap"
-    all_seq, _ = fmo.load_seqmap(fulltrain)
+    all_seq, _ = fmo.SeqmapLoader.load_seqmap(fulltrain)
     for seq in all_seq:
         curr_image_folder = os.path.join(image_root_folder, seq)
         output_path = os.path.join("videos_final_detectron", seq+".mp4")
